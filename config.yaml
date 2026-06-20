@@ -35,3 +35,31 @@ team:
 kb:
   data_dir: "data"               # 知识库存储目录
   auto_ingest: true              # 生成报告后是否自动导入知识库
+
+intelligence:
+  enabled: true
+  scan_interval_hours: 6         # 扫描间隔（小时）
+  lookback_days: 1               # 每次扫描回看多少天的新文献
+  sources:                       # 启用的学术源
+    - arxiv
+    - pubmed
+    - biorxiv
+    - semantic_scholar
+    - openalex
+  thresholds:                    # 生成告警的最低分数（1-10）
+    relevance: 7
+    novelty: 7
+    breakthrough: 7
+  notify:                        # 推送渠道
+    channels:
+      - console
+      # - email
+      # - webhook
+    email:
+      to: ["user@example.com"]
+      smtp_host: "smtp.example.com"
+      smtp_port: 587
+      smtp_user: ""
+      smtp_password: ""
+    webhook:
+      url: ""

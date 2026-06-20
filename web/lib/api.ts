@@ -131,3 +131,81 @@ export async function getGraph(
 export async function getTimeline(): Promise<Event[]> {
   return fetchJson<Event[]>("/api/timeline");
 }
+
+export interface AlertScores {
+  relevance: number;
+  novelty: number;
+  breakthrough: number;
+  reason: string;
+}
+
+export interface AlertArticle {
+  id: string;
+  title: string;
+  abstract: string;
+  authors: string[];
+  url: string;
+  doi: string;
+  published_date: string;
+  source: string;
+}
+
+export interface IntelligenceAlert {
+  id: string;
+  topic: string;
+  article: AlertArticle;
+  scores: AlertScores;
+  created_at: string;
+  notified: boolean;
+}
+
+export interface IntelligenceBriefing {
+  id: string;
+  topic: string;
+  title: string;
+  date: string;
+  content: string;
+  alerts: IntelligenceAlert[];
+  created_at: string;
+  markdown_path?: string;
+}
+
+export interface IntelligenceTopics {
+  topics: Record<string, { entities: string[]; report_ids: string[] }>;
+}
+
+export async function getIntelligenceTopics(): Promise<IntelligenceTopics> {
+  return fetchJson<IntelligenceTopics>("/api/intelligence/topics");
+}
+
+export async function listAlerts(
+  topic?: string,
+  limit = 20,
+  offset = 0
+): Promise<{ total: number; limit: number; offset: number; alerts: IntelligenceAlert[] }> {
+  const params = new URLSearchParams();
+  if (topic) params.set("topic", topic);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  return fetchJson(`/api/intelligence/alerts?${params.toString()}`);
+}
+
+export async function listBriefings(
+  topic?: string,
+  limit = 20,
+  offset = 0
+): Promise<{ total: number; limit: number; offset: number; briefings: IntelligenceBriefing[] }> {
+  const params = new URLSearchParams();
+  if (topic) params.set("topic", topic);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  return fetchJson(`/api/intelligence/briefings?${params.toString()}`);
+}
+
+export async function runIntelligenceScan(topics?: string[]): Promise<{ scanned_topics: string[]; total_alerts: number }> {
+  return fetchJson<{ scanned_topics: string[]; total_alerts: number }>("/api/intelligence/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topics }),
+  });
+}

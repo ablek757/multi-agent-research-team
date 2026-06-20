@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import yaml
 
@@ -61,6 +61,56 @@ class KBConfig:
 
 
 @dataclass
+class NotifyEmailConfig:
+    """邮件通知配置。"""
+
+    to: List[str] = field(default_factory=list)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+
+
+@dataclass
+class NotifyWebhookConfig:
+    """Webhook 通知配置。"""
+
+    url: str = ""
+
+
+@dataclass
+class NotifyConfig:
+    """通知渠道配置。"""
+
+    channels: List[str] = field(default_factory=lambda: ["console"])
+    email: NotifyEmailConfig = field(default_factory=NotifyEmailConfig)
+    webhook: NotifyWebhookConfig = field(default_factory=NotifyWebhookConfig)
+
+
+@dataclass
+class ThresholdConfig:
+    """情报告警阈值配置。"""
+
+    relevance: int = 7
+    novelty: int = 7
+    breakthrough: int = 7
+
+
+@dataclass
+class IntelligenceConfig:
+    """实时研究情报系统配置。"""
+
+    enabled: bool = True
+    scan_interval_hours: int = 6
+    lookback_days: int = 1
+    sources: List[str] = field(
+        default_factory=lambda: ["arxiv", "pubmed", "biorxiv", "semantic_scholar", "openalex"]
+    )
+    thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
+    notify: NotifyConfig = field(default_factory=NotifyConfig)
+
+
+@dataclass
 class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
@@ -68,6 +118,7 @@ class Config:
     report: ReportConfig = field(default_factory=ReportConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     kb: KBConfig = field(default_factory=KBConfig)
+    intelligence: IntelligenceConfig = field(default_factory=IntelligenceConfig)
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> "Config":
@@ -89,6 +140,30 @@ class Config:
             report=ReportConfig(**data.get("report", {})),
             team=TeamConfig(**data.get("team", {})),
             kb=KBConfig(**data.get("kb", {})),
+            intelligence=cls._load_intelligence_config(data.get("intelligence", {})),
+        )
+
+    @classmethod
+    def _load_intelligence_config(cls, data: dict) -> IntelligenceConfig:
+        thresholds = ThresholdConfig(**data.get("thresholds", {}))
+        notify_data = data.get("notify", {})
+        email_data = notify_data.get("email", {})
+        webhook_data = notify_data.get("webhook", {})
+        notify = NotifyConfig(
+            channels=notify_data.get("channels", ["console"]),
+            email=NotifyEmailConfig(**email_data),
+            webhook=NotifyWebhookConfig(**webhook_data),
+        )
+        return IntelligenceConfig(
+            enabled=data.get("enabled", True),
+            scan_interval_hours=data.get("scan_interval_hours", 6),
+            lookback_days=data.get("lookback_days", 1),
+            sources=data.get(
+                "sources",
+                ["arxiv", "pubmed", "biorxiv", "semantic_scholar", "openalex"],
+            ),
+            thresholds=thresholds,
+            notify=notify,
         )
 
     def validate(self) -> None:
