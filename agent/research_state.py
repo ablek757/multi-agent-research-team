@@ -145,3 +145,45 @@ class ResearchState:
             "traceability_report": self.traceability_report,
             "hallucination_risk": self.hallucination_risk,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ResearchState":
+        state = cls()
+        state.sources = [Source(**s) for s in data.get("sources", [])]
+        state.summaries = [PageSummary(**s) for s in data.get("summaries", [])]
+        for s in state.sources:
+            state.url_to_index[s.url] = s.index
+        for ps in state.summaries:
+            state.visited_urls.add(ps.url)
+        state.findings = list(data.get("findings", []))
+        state.entities = list(data.get("entities", []))
+        state.open_questions = list(data.get("open_questions", []))
+        state.themes = list(data.get("themes", []))
+        state.connections = list(data.get("connections", []))
+        state.contradictions = list(data.get("contradictions", []))
+        state.gaps = list(data.get("gaps", []))
+        state.verification_results = [
+            VerificationResult(**v) for v in data.get("verification_results", [])
+        ]
+        state.editor_feedback = list(data.get("editor_feedback", []))
+        state.revisions = list(data.get("revisions", []))
+        state.report_body = data.get("report_body", "")
+        state.reflections = list(data.get("reflections", []))
+        state.metrics = dict(data.get("metrics", {}))
+        state.evidence_chains = list(data.get("evidence_chains", []))
+        state.traceability_report = data.get("traceability_report", "")
+        state.hallucination_risk = float(data.get("hallucination_risk", 0.0))
+
+        # 重建辅助索引
+        for finding in state.findings:
+            state.findings_hashes.add(state._hash(finding))
+        for entity in state.entities:
+            state.entities_lower.add(entity.lower().strip())
+        return state
+
+    def to_snapshot(self) -> Dict[str, Any]:
+        return self.to_dict()
+
+    @classmethod
+    def from_snapshot(cls, data: Dict[str, Any]) -> "ResearchState":
+        return cls.from_dict(data)

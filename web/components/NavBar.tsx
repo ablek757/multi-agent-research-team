@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Brain, FileText, GitGraph, Home, Clock, Radio, Sparkles } from "lucide-react";
+import { BarChart3, Brain, Compass, FileText, GitGraph, Home, Clock, Radio, Sparkles } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "仪表盘", icon: Home },
+  { href: "/workbench", label: "探索工作台", icon: Compass },
   { href: "/research/cognitive", label: "认知研究", icon: Brain },
   { href: "/memory", label: "语义记忆", icon: Sparkles },
   { href: "/reports", label: "报告库", icon: FileText },

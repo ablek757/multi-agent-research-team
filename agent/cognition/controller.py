@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from agent.cognition.meta_critic import MetaCritic
 from agent.cognition.models import ExecutionTrace, Plan, SubTask, WorkingMemory
@@ -12,8 +12,11 @@ from agent.llm import LLMClient
 from agent.orchestrator import TeamOrchestrator
 from agent.research_state import ResearchState
 from agent.tools import ToolRegistry
+from agent.workbench.trace_models import TraceEventType
 
 logger = logging.getLogger(__name__)
+
+TraceCallback = Callable[[TraceEventType, Dict[str, Any], Optional[str], Optional[str], Optional[str]], None]
 
 
 class CognitiveController:
@@ -29,15 +32,18 @@ class CognitiveController:
         progress_callback: Callable[[str], None] = None,
         kb_store=None,
         tool_registry: Optional[ToolRegistry] = None,
+        trace_callback: TraceCallback = None,
     ):
         self.config = config
         self.llm = llm
         self.progress_callback = progress_callback or (lambda msg: None)
         self.kb_store = kb_store
         self.tool_registry = tool_registry
+        self.trace_callback = trace_callback
 
         self.planner = TaskPlanner(llm, max_subtasks=config.cognition.max_subtasks)
         self.critic = MetaCritic(llm)
+        self._current_node_id: Optional[str] = None
 
     def run(self, topic: str) -> ResearchState:
         """执行认知增强研究并返回最终研究状态。"""
@@ -67,6 +73,22 @@ class CognitiveController:
         )
         self._progress(f"[认知控制] 生成 {len(plan.subtasks)} 个子任务")
 
+        self._current_node_id = self._emit(
+            TraceEventType.PLAN_CREATED,
+            payload={
+                "topic": topic,
+                "subtasks": [
+                    {
+                        "id": st.id,
+                        "description": st.description,
+                        "goal": st.goal,
+                        "dependencies": st.dependencies,
+                    }
+                    for st in plan.subtasks
+                ],
+            },
+        )
+
         memory = WorkingMemory(topic=topic, plan=plan, related_reports=[])
 
         # 3. 执行循环
@@ -87,6 +109,13 @@ class CognitiveController:
             for subtask in ready:
                 self._execute_subtask(subtask, topic, main_state, memory)
 
+            # 检查点：可在关键节点暂停
+            if self.config.cognition.enable_checkpoints:
+                self._emit(
+                    TraceEventType.CHECKPOINT,
+                    payload={"label": "子任务批次完成，等待用户决策", "replan_count": replan_count},
+                )
+
             # 反思
             reflection = self.critic.reflect(
                 topic=topic,
@@ -97,6 +126,18 @@ class CognitiveController:
             memory.reflections.append(reflection)
             self._progress(
                 f"[认知控制] 反思: {reflection.reasoning[:120]}..."
+            )
+            self._emit(
+                TraceEventType.REFLECTION,
+                payload={
+                    "reasoning": reflection.reasoning,
+                    "information_gaps": reflection.information_gaps,
+                    "source_bias_notes": reflection.source_bias_notes,
+                    "suggested_queries": reflection.suggested_queries,
+                    "should_replan": reflection.should_replan,
+                },
+                parent_id=self._current_node_id,
+                agent="MetaCritic",
             )
 
             # 重规划
@@ -109,6 +150,18 @@ class CognitiveController:
                 memory.plan = plan
                 replan_count += 1
                 self._progress(f"[认知控制] 执行第 {replan_count} 次重规划")
+                self._emit(
+                    TraceEventType.REPLAN,
+                    payload={
+                        "replan_count": replan_count,
+                        "subtasks": [
+                            {"id": st.id, "description": st.description, "status": st.status}
+                            for st in plan.subtasks
+                        ],
+                    },
+                    parent_id=self._current_node_id,
+                    agent="TaskPlanner",
+                )
 
             # 若反思提供了建议查询，补充进主状态以便下一轮搜索
             if reflection.suggested_queries:
@@ -140,22 +193,57 @@ class CognitiveController:
         self._progress(f"[子任务 {subtask.id}] {subtask.description}")
         subtask.status = "running"
 
+        subtask_node = self._emit(
+            TraceEventType.SUBTASK_STARTED,
+            payload={
+                "subtask_id": subtask.id,
+                "description": subtask.description,
+                "goal": subtask.goal,
+                "dependencies": subtask.dependencies,
+            },
+            parent_id=self._current_node_id,
+            agent="CognitiveController",
+        )
+
         # 构建子任务主题：继承主主题 + 子任务目标
         subtopic = f"{topic} - {subtask.goal or subtask.description}"
 
-        # 运行现有研究团队流水线
-        orchestrator = TeamOrchestrator(
-            config=self.config,
-            progress_callback=self.progress_callback,
-        )
-        sub_state = orchestrator.run(subtopic)
+        try:
+            # 运行现有研究团队流水线，传递 trace_callback 以捕获子过程
+            orchestrator = TeamOrchestrator(
+                config=self.config,
+                progress_callback=self.progress_callback,
+                trace_callback=self.trace_callback,
+            )
+            sub_state = orchestrator.run(subtopic)
 
-        # 合并子结果到主状态
-        self._merge_state(main_state, sub_state, subtask)
+            # 合并子结果到主状态
+            self._merge_state(main_state, sub_state, subtask)
 
-        subtask.status = "completed"
-        subtask.result = sub_state.report_body[:500]
-        subtask.sources_used = [s.url for s in sub_state.sources]
+            subtask.status = "completed"
+            subtask.result = sub_state.report_body[:500]
+            subtask.sources_used = [s.url for s in sub_state.sources]
+
+            self._emit(
+                TraceEventType.SUBTASK_COMPLETED,
+                payload={
+                    "subtask_id": subtask.id,
+                    "sources": len(sub_state.sources),
+                    "findings": len(sub_state.findings),
+                    "result": subtask.result,
+                },
+                parent_id=subtask_node,
+                agent="CognitiveController",
+            )
+        except Exception as exc:
+            subtask.status = "failed"
+            self._emit(
+                TraceEventType.SUBTASK_FAILED,
+                payload={"subtask_id": subtask.id, "error": str(exc)},
+                parent_id=subtask_node,
+                agent="CognitiveController",
+            )
+            logger.warning("子任务 %s 执行失败: %s", subtask.id, exc)
 
         memory.traces.append(
             ExecutionTrace(
@@ -206,6 +294,12 @@ class CognitiveController:
         # 使用现有 Writer 生成综合报告
         from agent.agents import Writer
 
+        self._emit(
+            TraceEventType.SYNTHESIS_STARTED,
+            payload={"label": "综合各子任务结果生成最终报告"},
+            parent_id=self._current_node_id,
+            agent="Writer",
+        )
         style_profile = self._load_style_profile()
         writer = Writer(self.config.llm, self.progress_callback)
         report_body = writer.write(
@@ -240,8 +334,37 @@ class CognitiveController:
                 )
 
         main_state.report_body = report_body
+        self._emit(
+            TraceEventType.REPORT_GENERATED,
+            payload={
+                "sources": len(main_state.sources),
+                "findings": len(main_state.findings),
+                "metrics": main_state.metrics,
+            },
+            parent_id=self._current_node_id,
+            agent="Writer",
+        )
         return main_state
 
     def _progress(self, message: str):
         logger.info(message)
         self.progress_callback(message)
+
+    def _emit(
+        self,
+        event_type: TraceEventType,
+        payload: Optional[Dict[str, Any]] = None,
+        parent_id: Optional[str] = None,
+        node_id: Optional[str] = None,
+        agent: Optional[str] = None,
+    ) -> Optional[str]:
+        if self.trace_callback is None:
+            return node_id
+        self.trace_callback(
+            event_type,
+            payload or {},
+            parent_id=parent_id,
+            node_id=node_id,
+            agent=agent,
+        )
+        return node_id

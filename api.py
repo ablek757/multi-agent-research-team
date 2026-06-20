@@ -1,6 +1,8 @@
 """认知增强型研究执行与创作系统 FastAPI 服务。"""
 
+import json
 import logging
+import queue
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agent.cognition import CognitiveController
@@ -17,6 +20,7 @@ from agent.orchestrator import ResearchOrchestrator
 from agent.output import get_formatter, list_formats
 from agent.report import generate_report, save_report, save_state
 from agent.style import StyleLearner
+from agent.workbench.engine import WorkbenchEngine
 from kb import KnowledgeStore, parse_markdown_report
 
 logging.basicConfig(
@@ -44,6 +48,13 @@ kb_store = KnowledgeStore(
     data_dir=config.kb.data_dir,
     memory_config=config.memory,
     llm_config=config.llm,
+)
+llm_client = LLMClient(config.llm)
+workbench_engine = WorkbenchEngine(
+    config=config,
+    llm=llm_client,
+    kb_store=kb_store,
+    data_dir=config.kb.data_dir + "/workbench",
 )
 
 intelligence_store = None
@@ -418,6 +429,123 @@ def run_intelligence_scan(request: ScanRequest):
     except Exception as exc:
         logger.error("情报扫描失败: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# -----------------------------------------------------------------------------
+# 认知探索工作台 API
+# -----------------------------------------------------------------------------
+
+
+class WorkbenchStartRequest(BaseModel):
+    topic: str
+    cognitive: bool = True
+
+
+class WorkbenchInterventionRequest(BaseModel):
+    action: str
+    payload: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class WorkbenchForkRequest(BaseModel):
+    event_id: str
+    topic: Optional[str] = None
+
+
+@app.post("/api/workbench/sessions")
+def start_workbench_session(
+    request: WorkbenchStartRequest, background_tasks: BackgroundTasks
+):
+    try:
+        session = workbench_engine.create_session(
+            topic=request.topic, cognitive=request.cognitive
+        )
+        background_tasks.add_task(workbench_engine.run_session_sync, session)
+        return {"session_id": session.id, "status": session.status, "topic": session.topic}
+    except Exception as exc:
+        logger.error("启动工作台会话失败: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/workbench/sessions")
+def list_workbench_sessions():
+    return workbench_engine.list_sessions()
+
+
+@app.get("/api/workbench/sessions/{session_id}")
+def get_workbench_session(session_id: str):
+    session = workbench_engine.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return {
+        **session.to_dict(),
+        "graph": session.to_graph(),
+    }
+
+
+@app.get("/api/workbench/sessions/{session_id}/graph")
+def get_workbench_graph(session_id: str):
+    session = workbench_engine.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return session.to_graph()
+
+
+@app.get("/api/workbench/sessions/{session_id}/events")
+def stream_workbench_events(session_id: str):
+    session = workbench_engine.get_session(session_id)
+    if not session or not session.emitter:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    event_queue = session.emitter.subscribe()
+
+    def event_generator():
+        import time
+
+        while True:
+            try:
+                event = event_queue.get(timeout=30)
+                yield f"data: {json.dumps(event.to_dict(), ensure_ascii=False)}\n\n"
+            except queue.Empty:
+                yield f"data: {json.dumps({'type': 'heartbeat'}, ensure_ascii=False)}\n\n"
+                if session.status in ("completed", "failed"):
+                    break
+            except Exception:
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/workbench/sessions/{session_id}/intervene")
+def intervene_workbench_session(
+    session_id: str, request: WorkbenchInterventionRequest
+):
+    ok = workbench_engine.intervene(session_id, request.action, request.payload or {})
+    if not ok:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return {"session_id": session_id, "action": request.action, "queued": True}
+
+
+@app.post("/api/workbench/sessions/{session_id}/fork")
+def fork_workbench_session(session_id: str, request: WorkbenchForkRequest):
+    new_session = workbench_engine.fork(
+        session_id, request.event_id, topic=request.topic
+    )
+    if not new_session:
+        raise HTTPException(status_code=404, detail="父会话或事件不存在")
+    return {
+        "session_id": new_session.id,
+        "parent_id": session_id,
+        "fork_event_id": request.event_id,
+        "status": new_session.status,
+    }
 
 
 if __name__ == "__main__":

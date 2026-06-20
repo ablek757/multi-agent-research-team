@@ -290,3 +290,119 @@ export async function learnStyle(payload: {
 export async function listOutputFormats(): Promise<{ formats: string[] }> {
   return fetchJson<{ formats: string[] }>("/api/formats");
 }
+
+// ---------------------------------------------------------------------------
+// Workbench API
+// ---------------------------------------------------------------------------
+
+export interface WorkbenchSession {
+  id: string;
+  topic: string;
+  status: string;
+  cognitive: boolean;
+  created_at: string;
+  updated_at: string;
+  parent_id?: string;
+  fork_event_id?: string;
+  snapshots: Record<string, unknown>;
+  intervention_queue: unknown[];
+  metadata: Record<string, unknown>;
+  graph?: WorkbenchGraph;
+}
+
+export interface WorkbenchGraph {
+  nodes: WorkbenchNode[];
+  edges: WorkbenchEdge[];
+  session_id: string;
+  status: string;
+}
+
+export interface WorkbenchNode {
+  id: string;
+  label: string;
+  kind: string;
+  payload: Record<string, unknown>;
+}
+
+export interface WorkbenchEdge {
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface TraceEvent {
+  id: string;
+  session_id: string;
+  type: string;
+  timestamp: string;
+  payload: Record<string, unknown>;
+  parent_id?: string;
+  node_id?: string;
+  agent?: string;
+}
+
+export async function startWorkbenchSession(
+  topic: string,
+  cognitive = true
+): Promise<{ session_id: string; status: string; topic: string }> {
+  return fetchJson("/api/workbench/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic, cognitive }),
+  });
+}
+
+export async function listWorkbenchSessions(): Promise<{ sessions: WorkbenchSession[] }> {
+  return fetchJson("/api/workbench/sessions");
+}
+
+export async function getWorkbenchSession(sessionId: string): Promise<WorkbenchSession> {
+  return fetchJson(`/api/workbench/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function getWorkbenchGraph(sessionId: string): Promise<WorkbenchGraph> {
+  return fetchJson(`/api/workbench/sessions/${encodeURIComponent(sessionId)}/graph`);
+}
+
+export function subscribeWorkbenchEvents(
+  sessionId: string,
+  onEvent: (event: TraceEvent) => void
+): () => void {
+  const eventSource = new EventSource(
+    `${API_BASE}/api/workbench/sessions/${encodeURIComponent(sessionId)}/events`
+  );
+  eventSource.onmessage = (message) => {
+    try {
+      const data = JSON.parse(message.data);
+      if (data.type === "heartbeat") return;
+      onEvent(data as TraceEvent);
+    } catch {
+      // ignore malformed events
+    }
+  };
+  return () => eventSource.close();
+}
+
+export async function sendWorkbenchIntervention(
+  sessionId: string,
+  action: string,
+  payload: Record<string, unknown> = {}
+): Promise<{ session_id: string; action: string; queued: boolean }> {
+  return fetchJson(`/api/workbench/sessions/${encodeURIComponent(sessionId)}/intervene`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, payload }),
+  });
+}
+
+export async function forkWorkbenchSession(
+  sessionId: string,
+  eventId: string,
+  topic?: string
+): Promise<{ session_id: string; parent_id: string; fork_event_id: string; status: string }> {
+  return fetchJson(`/api/workbench/sessions/${encodeURIComponent(sessionId)}/fork`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: eventId, topic }),
+  });
+}
