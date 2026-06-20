@@ -7,7 +7,8 @@ from pathlib import Path
 from agent.config import Config
 from agent.llm import LLMClient
 from agent.orchestrator import ResearchOrchestrator
-from agent.report import generate_report, save_report
+from agent.report import generate_report, save_report, save_state
+from kb import KnowledgeStore, parse_markdown_report
 
 
 def setup_logging(verbose: bool):
@@ -80,7 +81,22 @@ def main():
     )
 
     saved_path = save_report(report, output_path)
+    state_path = str(Path(output_path).with_suffix(".json"))
+    save_state(state, state_path)
     print(f"\n✅ 研究报告已保存: {saved_path}")
+    print(f"✅ 研究状态已保存: {state_path}")
+
+    if getattr(config.kb, "auto_ingest", True):
+        try:
+            store = KnowledgeStore(data_dir=config.kb.data_dir)
+            ingested_report = parse_markdown_report(
+                markdown_path=saved_path,
+                state_path=state_path,
+            )
+            store.add_report(ingested_report)
+            print(f"✅ 已导入知识库: {ingested_report.id}")
+        except Exception as exc:
+            logging.warning("自动导入知识库失败: %s", exc)
 
 
 if __name__ == "__main__":

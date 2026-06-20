@@ -7,5 +7,6 @@ __pycache__/
 venv/
 output/*.md
 output/*.json
+data/
 *.log
 .DS_Store

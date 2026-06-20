@@ -13,6 +13,10 @@
 - **迭代优化**：若发现信息缺口或低可信度结论，自动触发补充搜索，循环深化。
 - **撰稿与审稿**：Writer 生成结构化报告，Editor 审核并提出修改意见，Writer 再修订。
 - **结构化报告**：生成包含执行摘要、背景、关键发现、关联分析、核查结论、局限性与参考来源的 Markdown 报告。
+- **知识库存储**：自动生成与 Markdown 配套的结构化 JSON state，并导入知识库持久化。
+- **主题关联分析**：基于实体共现构建交互式力导向关联网络。
+- **时间线追踪**：自动从报告中抽取时间表达式与关键事件，生成研究时间线。
+- **可检索前端**：提供 Next.js 可视化界面，支持全文检索、报告浏览、关联图与时间线。
 
 ## 快速开始
 
@@ -44,10 +48,24 @@ python main.py "量子计算在药物发现中的应用"
 python main.py "人工智能对齐研究现状" --depth 3 --output output/report.md --verbose
 ```
 
-### 4. 快速验证（无需真实 LLM）
+### 4. 启动知识库与可视化前端
+
+```bash
+# 启动 FastAPI 后端（默认 http://localhost:8000）
+python api.py
+
+# 新终端：启动 Next.js 前端（默认 http://localhost:3000）
+cd web
+npm run dev
+```
+
+### 5. 快速验证（无需真实 LLM）
 
 ```bash
 python test_smoke.py
+
+# 导入示例数据体验知识库
+PYTHONPATH=. python scripts/seed_kb.py
 ```
 
 参数说明：
@@ -98,18 +116,50 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | `team.review_rounds` | 编辑审稿-修订轮数 |
 | `team.min_credibility_threshold` | 触发补充搜索的可信度阈值（1-10） |
 | `team.max_claims_to_verify` | 每轮核查的最大声明数 |
+| `kb.data_dir` | 知识库数据目录 |
+| `kb.auto_ingest` | 生成报告后是否自动导入知识库 |
+
+## 知识库 API
+
+后端启动后访问 http://localhost:8000/docs 查看自动生成的 API 文档。主要接口：
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/stats` | 仪表盘统计 |
+| `GET /api/reports` | 报告列表与搜索 |
+| `GET /api/reports/{id}` | 报告详情 |
+| `GET /api/search?q=...` | 全文检索 |
+| `GET /api/graph` | 主题关联图数据 |
+| `GET /api/timeline` | 跨报告时间线 |
+| `POST /api/reports/ingest` | 批量导入报告目录 |
 
 ## 项目结构
 
 ```
 deep-research-agent/
 ├── main.py                 # CLI 入口
+├── api.py                  # FastAPI 知识库服务
 ├── config.yaml             # 默认配置
 ├── requirements.txt        # 依赖
 ├── README.md               # 本文件
 ├── test_smoke.py           # 无 LLM 的多 Agent 流水线冒烟测试
 ├── .env.example            # 环境变量示例
-└── agent/
+├── data/                   # 知识库持久化数据
+├── output/                 # 生成的 Markdown 报告与 JSON state
+├── scripts/                # 辅助脚本
+│   └── seed_kb.py          # 示例数据导入
+├── kb/                     # 知识库核心模块
+│   ├── models.py           # 数据模型
+│   ├── parser.py           # 报告解析器
+│   ├── store.py            # 存储与索引
+│   ├── analyzer.py         # 主题关联分析
+│   ├── timeline.py         # 时间线抽取
+│   └── search.py           # 全文检索
+├── web/                    # Next.js 可视化前端
+│   ├── app/                # 页面路由
+│   ├── components/         # 可复用组件
+│   └── lib/api.ts          # API 客户端
+└── agent/                  # 多 Agent 研究团队
     ├── agents/             # 多 Agent 角色
     │   ├── base.py
     │   ├── search_planner.py

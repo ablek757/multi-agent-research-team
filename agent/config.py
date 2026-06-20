@@ -53,12 +53,21 @@ class TeamConfig:
 
 
 @dataclass
+class KBConfig:
+    """知识库配置。"""
+
+    data_dir: str = "data"
+    auto_ingest: bool = True
+
+
+@dataclass
 class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
     report: ReportConfig = field(default_factory=ReportConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
+    kb: KBConfig = field(default_factory=KBConfig)
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> "Config":
@@ -79,6 +88,7 @@ class Config:
             research=ResearchConfig(**data.get("research", {})),
             report=ReportConfig(**data.get("report", {})),
             team=TeamConfig(**data.get("team", {})),
+            kb=KBConfig(**data.get("kb", {})),
         )
 
     def validate(self) -> None:

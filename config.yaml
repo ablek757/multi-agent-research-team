@@ -31,3 +31,7 @@ team:
   review_rounds: 1               # 编辑审稿-修订轮数
   min_credibility_threshold: 5   # 触发补充搜索的可信度阈值（1-10）
   max_claims_to_verify: 10       # 每轮事实核查员检查的最大声明数
+
+kb:
+  data_dir: "data"               # 知识库存储目录
+  auto_ingest: true              # 生成报告后是否自动导入知识库

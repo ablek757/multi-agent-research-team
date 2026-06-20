@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -69,4 +70,15 @@ def save_report(report: str, output_path: str) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(report, encoding="utf-8")
     logger.info("报告已保存至: %s", path)
+    return str(path)
+
+
+def save_state(state: ResearchState, output_path: str) -> str:
+    """保存 ResearchState 为 JSON，供知识库解析使用。"""
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = state.to_dict()
+    data["report_body"] = state.report_body
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info("研究状态已保存至: %s", path)
     return str(path)
