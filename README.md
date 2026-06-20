@@ -14,6 +14,7 @@
 - **信息抽取**：Researcher 借助 LLM 摘要每页内容，提取关键发现、实体、待解答问题。
 - **深度分析**：Analyst 综合多来源信息，提炼主题、关联、矛盾与剩余空白。
 - **事实核查**：FactChecker 对关键发现进行来源交叉验证、可信度评分与风险标记。
+- **可信验证与溯源**：TraceabilityAuditor 为每个 AI 结论自动建立可追溯证据链，多源交叉验证并输出置信度徽章，标记幻觉风险，让报告经得起专业审视。
 - **迭代优化**：若发现信息缺口或低可信度结论，自动触发补充搜索，循环深化。
 - **撰稿与审稿**：Writer 生成结构化报告，Editor 审核并提出修改意见，Writer 再修订。
 - **多模态创作输出**：一次研究可生成 Markdown、PPT（`python-pptx`）、HTML 演示页、数据集摘要 CSV、可执行方案看板。
@@ -125,6 +126,7 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | **Researcher** | 执行搜索、抓取网页、提取关键发现、实体与待解答问题 |
 | **Analyst** | 跨来源综合，提炼主题、关联、矛盾与剩余缺口 |
 | **FactChecker** | 对关键发现进行交叉验证、可信度评分、偏见/风险标记 |
+| **TraceabilityAuditor** | 为每个结论建立可追溯证据链，进行多源交叉验证、置信度评级与幻觉风险检测 |
 | **Writer** | 基于验证后的材料撰写结构化、带引用的 Markdown 报告 |
 | **Editor** | 审核报告质量，指出逻辑漏洞与信息缺口，提出修改意见 |
 
@@ -150,6 +152,11 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | `team.review_rounds` | 编辑审稿-修订轮数 |
 | `team.min_credibility_threshold` | 触发补充搜索的可信度阈值（1-10） |
 | `team.max_claims_to_verify` | 每轮核查的最大声明数 |
+| `verification.enabled` | 是否启用可信验证与溯源系统 |
+| `verification.max_claims` | 每份报告验证的最大声明数 |
+| `verification.confidence_threshold` | 触发自动修订的置信度阈值（0-100） |
+| `verification.enable_hallucination_detection` | 是否启用幻觉风险检测 |
+| `verification.enable_auto_revision` | 是否根据审计结果自动修订报告 |
 | `kb.data_dir` | 知识库数据目录 |
 | `kb.auto_ingest` | 生成报告后是否自动导入知识库 |
 | `intelligence.enabled` | 是否启用实时情报系统 |
@@ -236,8 +243,18 @@ deep-research-agent/
     │   ├── researcher.py
     │   ├── analyst.py
     │   ├── fact_checker.py
+    │   ├── traceability_auditor.py
     │   ├── writer.py
     │   └── editor.py
+    ├── verification/       # 可信验证与溯源系统
+    │   ├── models.py
+    │   ├── claim_extractor.py
+    │   ├── evidence_collector.py
+    │   ├── cross_validator.py
+    │   ├── confidence_scorer.py
+    │   ├── hallucination_detector.py
+    │   ├── traceability_engine.py
+    │   └── verifier.py
     ├── cognition/          # 认知增强控制层
     │   ├── controller.py
     │   ├── planner.py

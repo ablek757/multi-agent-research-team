@@ -17,6 +17,7 @@ class Finding(BaseModel):
     text: str
     source_index: Optional[int] = None
     source_url: Optional[str] = None
+    confidence: Optional[float] = None  # 可信验证分数（0-100）
 
 
 class Topic(BaseModel):

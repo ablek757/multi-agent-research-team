@@ -33,6 +33,15 @@ DEFAULT_TEMPLATE = """# {{ title }}
 """
 
 
+def _append_traceability_report(report_body: str, state: ResearchState) -> str:
+    """若存在可信验证与溯源报告，则追加到正文末尾。"""
+    if not state.traceability_report:
+        return report_body
+    if state.traceability_report.strip() in report_body:
+        return report_body
+    return report_body + "\n\n" + state.traceability_report
+
+
 def generate_report(
     topic: str,
     state: ResearchState,
@@ -51,6 +60,8 @@ def generate_report(
         writer = Writer(config.llm)
         report_body = writer.write(topic, state, config.research.language)
         state.report_body = report_body
+
+    report_body = _append_traceability_report(report_body, state)
 
     data = {
         "title": config.report.title,

@@ -2,6 +2,7 @@ import logging
 from typing import Callable, Optional
 
 from agent.agents import Analyst, Editor, FactChecker, Researcher, SearchPlanner, Writer
+from agent.agents.traceability_auditor import TraceabilityAuditor
 from agent.config import Config
 from agent.research_state import ResearchState
 
@@ -27,6 +28,11 @@ class TeamOrchestrator:
         self.fact_checker = FactChecker(config.llm, progress_callback)
         self.writer = Writer(config.llm, progress_callback)
         self.editor = Editor(config.llm, progress_callback)
+        self.traceability_auditor = TraceabilityAuditor(
+            llm_config=config.llm,
+            verification_config=config.verification,
+            progress_callback=progress_callback,
+        )
         self._meta_critic: Optional = None
 
     def _get_meta_critic(self):
@@ -67,6 +73,25 @@ class TeamOrchestrator:
 
         report_body = self._write_and_revise(topic)
         self.state.report_body = report_body
+
+        # 可信验证与溯源审计
+        if self.config.verification.enabled:
+            try:
+                self.traceability_auditor.audit(
+                    topic=topic,
+                    state=self.state,
+                    language=self.config.research.language,
+                )
+                if self.config.verification.enable_auto_revision:
+                    report_body = self.traceability_auditor.maybe_revise(
+                        topic=topic,
+                        state=self.state,
+                        language=self.config.research.language,
+                        style_profile=self._load_style_profile(),
+                    )
+                    self.state.report_body = report_body
+            except Exception as exc:
+                logger.warning("可信验证与溯源审计失败: %s", exc)
 
         # 质量评估
         try:

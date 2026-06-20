@@ -125,6 +125,9 @@ def main():
         state = orchestrator.run(args.topic)
 
     print(f"\n共收集 {len(state.sources)} 个来源，{len(state.findings)} 条关键发现。")
+    if state.evidence_chains:
+        verified = sum(1 for c in state.evidence_chains if c.get("verdict") == "verified")
+        print(f"可信验证：{len(state.evidence_chains)} 条声明，{verified} 条已验证，幻觉风险 {state.hallucination_risk:.1%}")
     if state.metrics:
         print(f"综合质量评分: {state.metrics.get('overall_score', 'N/A')}")
 

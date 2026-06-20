@@ -20,6 +20,7 @@ def test_pipeline():
     cfg.search.max_workers = 1
     cfg.team.max_research_iterations = 1
     cfg.team.review_rounds = 0
+    cfg.verification.enabled = False
 
     orchestrator = TeamOrchestrator(cfg)
 

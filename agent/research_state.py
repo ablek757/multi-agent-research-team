@@ -56,6 +56,11 @@ class ResearchState:
         self.reflections: List[Dict[str, Any]] = []
         self.metrics: Dict[str, Any] = {}
 
+        # 可信验证与溯源系统产生的数据
+        self.evidence_chains: List[Dict[str, Any]] = []
+        self.traceability_report: str = ""
+        self.hallucination_risk: float = 0.0
+
     def add_source(self, title: str, url: str, snippet: str = "") -> int:
         if url in self.url_to_index:
             return self.url_to_index[url]
@@ -136,4 +141,7 @@ class ResearchState:
             "revisions": self.revisions,
             "reflections": self.reflections,
             "metrics": self.metrics,
+            "evidence_chains": self.evidence_chains,
+            "traceability_report": self.traceability_report,
+            "hallucination_risk": self.hallucination_risk,
         }

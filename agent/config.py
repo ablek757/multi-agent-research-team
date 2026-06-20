@@ -106,6 +106,17 @@ class StyleConfig:
 
 
 @dataclass
+class VerificationConfig:
+    """可信验证与溯源系统配置。"""
+
+    enabled: bool = True
+    max_claims: int = 10
+    confidence_threshold: int = 50
+    enable_hallucination_detection: bool = True
+    enable_auto_revision: bool = False
+
+
+@dataclass
 class NotifyEmailConfig:
     """邮件通知配置。"""
 
@@ -167,6 +178,7 @@ class Config:
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     style: StyleConfig = field(default_factory=StyleConfig)
+    verification: VerificationConfig = field(default_factory=VerificationConfig)
     intelligence: IntelligenceConfig = field(default_factory=IntelligenceConfig)
 
     @classmethod
@@ -193,6 +205,7 @@ class Config:
             memory=MemoryConfig(**data.get("memory", {})),
             output=OutputConfig(**data.get("output", {})),
             style=StyleConfig(**data.get("style", {})),
+            verification=VerificationConfig(**data.get("verification", {})),
             intelligence=cls._load_intelligence_config(data.get("intelligence", {})),
         )
 
@@ -239,3 +252,7 @@ class Config:
         for fmt in self.output.formats:
             if fmt not in {"markdown", "slides", "html", "dataset_brief", "action_plan"}:
                 raise ValueError(f"Unsupported output format: {fmt}")
+        if self.verification.max_claims < 1:
+            raise ValueError("verification.max_claims must be at least 1")
+        if not 0 <= self.verification.confidence_threshold <= 100:
+            raise ValueError("verification.confidence_threshold must be between 0 and 100")

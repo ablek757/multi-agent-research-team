@@ -70,6 +70,13 @@ style:
   min_samples: 1                 # 触发风格学习的最小样本数
   auto_learn_from_edits: true    # 是否自动从修订中学习
 
+verification:
+  enabled: true                  # 是否启用可信验证与溯源系统
+  max_claims: 10                 # 每份报告验证的最大声明数
+  confidence_threshold: 50       # 低于此分数（0-100）的声明触发自动修订
+  enable_hallucination_detection: true  # 是否启用幻觉风险检测
+  enable_auto_revision: false    # 是否根据审计结果自动修订报告
+
 intelligence:
   enabled: true
   scan_interval_hours: 6         # 扫描间隔（小时）

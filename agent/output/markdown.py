@@ -38,6 +38,8 @@ class MarkdownFormatter(OutputFormatter):
 
     def format(self, topic: str, state: ResearchState) -> OutputArtifact:
         report_body = self._build_report_body(topic, state)
+        if state.traceability_report and state.traceability_report.strip() not in report_body:
+            report_body = report_body + "\n\n" + state.traceability_report
         data = {
             "title": self.config.report.title,
             "topic": topic,
