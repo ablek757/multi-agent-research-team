@@ -17,6 +17,7 @@
 - **主题关联分析**：基于实体共现构建交互式力导向关联网络。
 - **时间线追踪**：自动从报告中抽取时间表达式与关键事件，生成研究时间线。
 - **可检索前端**：提供 Next.js 可视化界面，支持全文检索、报告浏览、关联图与时间线。
+- **实时研究情报**：7×24 小时自动扫描 arXiv、PubMed、bioRxiv、Semantic Scholar、OpenAlex，基于知识库主题发现新突破，生成个性化简报并主动推送。
 
 ## 快速开始
 
@@ -59,7 +60,22 @@ cd web
 npm run dev
 ```
 
-### 5. 快速验证（无需真实 LLM）
+### 5. 启动实时研究情报系统（可选）
+
+```bash
+# 方式一：启动 API 服务，自动后台 7×24 小时扫描
+python api.py
+
+# 方式二：手动执行一次扫描
+python -m intelligence.cli scan
+
+# 方式三：启动独立守护进程
+python -m intelligence.cli daemon
+```
+
+扫描结果会生成告警与简报，自动导入知识库，并可通过邮件/Webhook 推送。
+
+### 6. 快速验证（无需真实 LLM）
 
 ```bash
 python test_smoke.py
@@ -118,6 +134,14 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | `team.max_claims_to_verify` | 每轮核查的最大声明数 |
 | `kb.data_dir` | 知识库数据目录 |
 | `kb.auto_ingest` | 生成报告后是否自动导入知识库 |
+| `intelligence.enabled` | 是否启用实时情报系统 |
+| `intelligence.scan_interval_hours` | 扫描间隔（小时） |
+| `intelligence.lookback_days` | 每次扫描回看天数 |
+| `intelligence.sources` | 启用的学术源列表 |
+| `intelligence.thresholds.*` | 相关性/新颖性/突破性阈值（1-10） |
+| `intelligence.notify.channels` | 推送渠道：`console` / `email` / `webhook` |
+| `intelligence.notify.email.*` | SMTP 邮件配置 |
+| `intelligence.notify.webhook.url` | Webhook 地址 |
 
 ## 知识库 API
 
@@ -132,6 +156,10 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | `GET /api/graph` | 主题关联图数据 |
 | `GET /api/timeline` | 跨报告时间线 |
 | `POST /api/reports/ingest` | 批量导入报告目录 |
+| `GET /api/intelligence/topics` | 当前监控主题与实体 |
+| `GET /api/intelligence/alerts` | 情报告警列表 |
+| `GET /api/intelligence/briefings` | 研究简报列表 |
+| `POST /api/intelligence/run` | 手动触发一次扫描 |
 
 ## 项目结构
 
@@ -175,6 +203,16 @@ deep-research-agent/
     ├── research_state.py   # 研究状态管理
     ├── orchestrator.py     # 多 Agent 团队协调器
     └── report.py           # Markdown 报告生成
+└── intelligence/           # 实时研究情报系统
+    ├── sources/            # 学术源适配器（arXiv/PubMed/bioRxiv/S2/OpenAlex）
+    ├── models.py           # 文章、告警、简报模型
+    ├── store.py            # 情报本地存储
+    ├── matcher.py          # 主题匹配与 LLM 评分
+    ├── briefing.py         # 简报生成器
+    ├── notifier.py         # 邮件/Webhook 推送
+    ├── scheduler.py        # 7×24 小时调度器
+    ├── service.py          # 情报服务主类
+    └── cli.py              # 命令行入口
 ```
 
 ## 注意事项
