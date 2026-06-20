@@ -23,3 +23,11 @@ report:
   title: "深度研究报告"
   output_dir: "output"
   include_citations: true
+
+team:
+  enable_fact_checker: true      # 是否启用事实核查员
+  enable_editor: true            # 是否启用编辑审核员
+  max_research_iterations: 0     # 研究阶段最大迭代轮数（含初始轮）；0 表示使用 research.depth
+  review_rounds: 1               # 编辑审稿-修订轮数
+  min_credibility_threshold: 5   # 触发补充搜索的可信度阈值（1-10）
+  max_claims_to_verify: 10       # 每轮事实核查员检查的最大声明数

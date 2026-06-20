@@ -1,10 +1,10 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
 from jinja2 import Template
 
+from agent.agents.writer import Writer
 from agent.config import Config
 from agent.llm import LLMClient
 from agent.research_state import ResearchState
@@ -36,25 +36,20 @@ def generate_report(
     topic: str,
     state: ResearchState,
     config: Config,
-    llm: LLMClient,
+    llm: LLMClient | None = None,
 ) -> str:
-    logger.info("正在分析跨来源关联...")
-    connections = llm.find_connections(
-        topic=topic,
-        findings=state.findings,
-        entities=state.entities,
-        language=config.research.language,
-    )
+    """生成 Markdown 研究报告。
 
-    logger.info("正在生成报告正文...")
-    report_body = llm.generate_report(
-        topic=topic,
-        findings=state.findings,
-        entities=state.entities,
-        connections=connections,
-        sources=[{"title": s.title, "url": s.url} for s in state.sources],
-        language=config.research.language,
-    )
+    如果研究团队已经生成报告正文，则直接包装；否则使用 Writer 生成。
+    """
+    if state.report_body:
+        logger.info("使用研究团队已生成的报告正文...")
+        report_body = state.report_body
+    else:
+        logger.info("研究团队尚未生成报告，使用 Writer 生成...")
+        writer = Writer(config.llm)
+        report_body = writer.write(topic, state, config.research.language)
+        state.report_body = report_body
 
     data = {
         "title": config.report.title,

@@ -41,11 +41,24 @@ class ReportConfig:
 
 
 @dataclass
+class TeamConfig:
+    """多 Agent 团队协作配置。"""
+
+    enable_fact_checker: bool = True
+    enable_editor: bool = True
+    max_research_iterations: int = 0  # 0 表示回退到 research.depth
+    review_rounds: int = 1
+    min_credibility_threshold: int = 5
+    max_claims_to_verify: int = 10
+
+
+@dataclass
 class Config:
     llm: LLMConfig = field(default_factory=LLMConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
     report: ReportConfig = field(default_factory=ReportConfig)
+    team: TeamConfig = field(default_factory=TeamConfig)
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> "Config":
@@ -65,6 +78,7 @@ class Config:
             search=SearchConfig(**data.get("search", {})),
             research=ResearchConfig(**data.get("research", {})),
             report=ReportConfig(**data.get("report", {})),
+            team=TeamConfig(**data.get("team", {})),
         )
 
     def validate(self) -> None:
@@ -76,3 +90,7 @@ class Config:
             raise ValueError("research.depth must be at least 1")
         if self.search.top_k_to_fetch > self.search.results_per_query:
             raise ValueError("search.top_k_to_fetch cannot exceed search.results_per_query")
+        if self.team.max_research_iterations < 0:
+            raise ValueError("team.max_research_iterations must be non-negative")
+        if self.team.review_rounds < 0:
+            raise ValueError("team.review_rounds must be non-negative")

@@ -1,6 +1,6 @@
 import hashlib
 from dataclasses import dataclass, field
-from typing import Dict, List, Set
+from typing import Any, Dict, List, Set
 
 
 @dataclass
@@ -23,6 +23,15 @@ class PageSummary:
     relevance_score: int = 5
 
 
+@dataclass
+class VerificationResult:
+    claim: str
+    sources: List[str] = field(default_factory=list)
+    credibility_score: int = 5
+    assessment: str = ""
+    concerns: List[str] = field(default_factory=list)
+
+
 class ResearchState:
     def __init__(self):
         self.sources: List[Source] = []
@@ -34,6 +43,16 @@ class ResearchState:
         self.open_questions: List[str] = []
         self.findings_hashes: Set[str] = set()
         self.entities_lower: Set[str] = set()
+
+        # Multi-agent collaboration enriched state
+        self.themes: List[str] = []
+        self.connections: List[Dict[str, Any]] = []
+        self.contradictions: List[Dict[str, Any]] = []
+        self.gaps: List[str] = []
+        self.verification_results: List[VerificationResult] = []
+        self.editor_feedback: List[str] = []
+        self.revisions: List[Dict[str, Any]] = []
+        self.report_body: str = ""
 
     def add_source(self, title: str, url: str, snippet: str = "") -> int:
         if url in self.url_to_index:
@@ -97,4 +116,20 @@ class ResearchState:
             "findings": self.findings,
             "entities": self.entities,
             "open_questions": self.open_questions,
+            "themes": self.themes,
+            "connections": self.connections,
+            "contradictions": self.contradictions,
+            "gaps": self.gaps,
+            "verification_results": [
+                {
+                    "claim": v.claim,
+                    "sources": v.sources,
+                    "credibility_score": v.credibility_score,
+                    "assessment": v.assessment,
+                    "concerns": v.concerns,
+                }
+                for v in self.verification_results
+            ],
+            "editor_feedback": self.editor_feedback,
+            "revisions": self.revisions,
         }

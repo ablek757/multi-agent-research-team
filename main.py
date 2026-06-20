@@ -21,7 +21,7 @@ def setup_logging(verbose: bool):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="自动化深度研究 Agent：输入主题，生成结构化研究报告。"
+        description="协作式 Multi-Agent 深度研究团队：输入主题，多 Agent 分工生成结构化研究报告。"
     )
     parser.add_argument("topic", help="研究主题")
     parser.add_argument(
