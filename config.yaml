@@ -36,6 +36,40 @@ kb:
   data_dir: "data"               # 知识库存储目录
   auto_ingest: true              # 生成报告后是否自动导入知识库
 
+cognition:
+  enabled: false                 # 是否启用认知增强控制层
+  reflection_rounds: 1           # 每轮研究后元认知反思次数
+  max_subtasks: 5                # 主题最大子任务拆分数量
+  enable_checkpoints: false      # 是否在关键节点暂停等待人工确认
+  max_replan_iterations: 2       # 单次研究最大重规划次数
+
+memory:
+  enabled: false                 # 是否启用向量长期记忆
+  backend: "openai"              # openai / sentence_transformers / mock
+  model: "text-embedding-3-small" # embedding 模型
+  vector_dir: "vectors"          # 向量存储目录
+  chunk_size: 500                # 文本分块大小
+  chunk_overlap: 50              # 分块重叠大小
+  top_k: 10                      # 语义检索返回数量
+
+output:
+  formats:                       # 默认输出格式
+    - "markdown"
+    # - "slides"
+    # - "html"
+    # - "dataset_brief"
+    # - "action_plan"
+  slides_template: "default"     # PPT 模板
+  html_theme: "default"          # HTML 主题
+  dataset_brief_max_rows: 100    # 数据集摘要最大行数
+  action_plan_max_items: 20      # 可执行方案最大条目数
+
+style:
+  enabled: false                 # 是否启用用户研究风格学习
+  profile_path: "data/user_style_profile.json"
+  min_samples: 1                 # 触发风格学习的最小样本数
+  auto_learn_from_edits: true    # 是否自动从修订中学习
+
 intelligence:
   enabled: true
   scan_interval_hours: 6         # 扫描间隔（小时）

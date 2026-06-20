@@ -17,6 +17,10 @@ class LLMClient:
             kwargs["base_url"] = config.base_url
         self.client = OpenAI(**kwargs)
 
+    def complete(self, system: str, user: str, json_mode: bool = False) -> str:
+        """通用对话完成接口。"""
+        return self._chat(system, user, json_mode)
+
     def _chat(self, system: str, user: str, json_mode: bool = False) -> str:
         messages = [
             {"role": "system", "content": system},

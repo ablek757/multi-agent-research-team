@@ -1,10 +1,14 @@
-# 协作式 Multi-Agent 深度研究团队
+# 认知增强型研究执行与创作系统
 
-输入一个研究主题，由多个专业 Agent 组成的协作团队自动完成搜索、研究、分析、核查、撰稿与审稿，最终生成一份带引用的结构化 Markdown 深度研究报告。
+输入一个研究主题，系统自动完成主题分解、多 Agent 协作研究、元认知反思、知识库持久化，并一键输出 Markdown 报告、PPT、HTML 演示、数据集摘要与可执行方案看板等多种模态成果。系统持续学习用户的研究风格，让后续输出越来越贴合个人偏好。
 
 ## 核心能力
 
+- **认知增强控制层**：将复杂主题自动拆分为子任务，动态规划、执行、反思，必要时重规划。
 - **多 Agent 协作**：SearchPlanner、Researcher、Analyst、FactChecker、Writer、Editor 六大角色分工协作，模拟人类研究团队。
+- **元认知反思**：MetaCritic 在研究过程中主动发现信息缺口、来源偏见与计划偏差，并推荐下一轮查询。
+- **通用工具注册表**：搜索、网页抓取、知识库查询、计算、日期解析等能力统一封装为可插拔工具。
+- **长期向量记忆**：基于 embedding 的语义记忆，支持跨研究召回相关报告，发现隐藏关联。
 - **自动搜索**：根据主题和当前缺口生成多维度查询，使用 DuckDuckGo 免费搜索。
 - **网页阅读**：抓取页面正文并去噪，使用 `trafilatura` + `BeautifulSoup` 双保险提取。
 - **信息抽取**：Researcher 借助 LLM 摘要每页内容，提取关键发现、实体、待解答问题。
@@ -12,11 +16,13 @@
 - **事实核查**：FactChecker 对关键发现进行来源交叉验证、可信度评分与风险标记。
 - **迭代优化**：若发现信息缺口或低可信度结论，自动触发补充搜索，循环深化。
 - **撰稿与审稿**：Writer 生成结构化报告，Editor 审核并提出修改意见，Writer 再修订。
-- **结构化报告**：生成包含执行摘要、背景、关键发现、关联分析、核查结论、局限性与参考来源的 Markdown 报告。
+- **多模态创作输出**：一次研究可生成 Markdown、PPT（`python-pptx`）、HTML 演示页、数据集摘要 CSV、可执行方案看板。
+- **用户研究风格学习**：从历史修订与审稿反馈中提取语言、段落长度、引用密度、语气等偏好，后续自动应用。
+- **质量评估器**：自动评估来源多样性、引用覆盖率、声明-来源对齐度、篇幅完整性与幻觉风险，输出综合评分。
 - **知识库存储**：自动生成与 Markdown 配套的结构化 JSON state，并导入知识库持久化。
 - **主题关联分析**：基于实体共现构建交互式力导向关联网络。
 - **时间线追踪**：自动从报告中抽取时间表达式与关键事件，生成研究时间线。
-- **可检索前端**：提供 Next.js 可视化界面，支持全文检索、报告浏览、关联图与时间线。
+- **可检索前端**：提供 Next.js 可视化界面，支持认知研究、语义记忆检索、风格学习、报告浏览、关联图与时间线。
 - **实时研究情报**：7×24 小时自动扫描 arXiv、PubMed、bioRxiv、Semantic Scholar、OpenAlex，基于知识库主题发现新突破，生成个性化简报并主动推送。
 
 ## 快速开始
@@ -41,6 +47,15 @@ export OPENAI_MODEL="gpt-4o-mini"                   # 可选，覆盖 config.yam
 
 ```bash
 python main.py "量子计算在药物发现中的应用"
+```
+
+启用认知增强并生成多模态成果：
+
+```bash
+python main.py "量子计算在药物发现中的应用" \
+  --cognitive \
+  --formats markdown,slides,html,dataset_brief,action_plan \
+  --verbose
 ```
 
 更多选项：
@@ -85,10 +100,13 @@ PYTHONPATH=. python scripts/seed_kb.py
 ```
 
 参数说明：
-- `--topic`: 研究主题（必填）
+- `topic`: 研究主题（必填）
 - `--depth`: 搜索迭代轮数（覆盖 `research.depth`，`team.max_research_iterations` 为 0 时生效）
 - `--output`: 报告输出路径
 - `--config`: 配置文件路径
+- `--cognitive`: 启用认知增强控制层
+- `--formats`: 输出格式，逗号分隔：`markdown` / `slides` / `html` / `dataset_brief` / `action_plan`
+- `--style-profile`: 用户风格画像路径
 - `--verbose`: 显示详细日志
 
 ## Agent 角色与协作流程
@@ -142,6 +160,22 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | `intelligence.notify.channels` | 推送渠道：`console` / `email` / `webhook` |
 | `intelligence.notify.email.*` | SMTP 邮件配置 |
 | `intelligence.notify.webhook.url` | Webhook 地址 |
+| `cognition.enabled` | 是否启用认知增强控制层 |
+| `cognition.reflection_rounds` | 每轮研究后的反思次数 |
+| `cognition.max_subtasks` | 主题最大子任务数 |
+| `cognition.enable_checkpoints` | 是否在关键节点暂停等待人工确认 |
+| `cognition.max_replan_iterations` | 单次研究最大重规划次数 |
+| `memory.enabled` | 是否启用向量长期记忆 |
+| `memory.backend` | embedding 后端：`openai` / `sentence_transformers` / `mock` |
+| `memory.model` | embedding 模型名 |
+| `memory.vector_dir` | 向量存储目录 |
+| `memory.top_k` | 语义检索返回数量 |
+| `output.formats` | 默认输出格式列表 |
+| `output.slides_template` | PPT 模板标识 |
+| `output.html_theme` | HTML 主题标识 |
+| `style.enabled` | 是否启用用户研究风格学习 |
+| `style.profile_path` | 风格画像文件路径 |
+| `style.min_samples` | 触发风格学习的最小样本数 |
 
 ## 知识库 API
 
@@ -152,10 +186,18 @@ SearchPlanner → Researcher → Analyst → FactChecker
 | `GET /api/stats` | 仪表盘统计 |
 | `GET /api/reports` | 报告列表与搜索 |
 | `GET /api/reports/{id}` | 报告详情 |
+| `GET /api/reports/{id}/related` | 相关历史报告（向量召回） |
 | `GET /api/search?q=...` | 全文检索 |
+| `POST /api/memory/search` | 语义记忆检索 |
 | `GET /api/graph` | 主题关联图数据 |
 | `GET /api/timeline` | 跨报告时间线 |
 | `POST /api/reports/ingest` | 批量导入报告目录 |
+| `GET /api/formats` | 列出支持的输出格式 |
+| `POST /api/research` | 启动研究任务（后台执行） |
+| `GET /api/research/{job_id}` | 查询研究任务状态 |
+| `GET /api/style/profile` | 获取用户风格画像 |
+| `POST /api/style/learn` | 提交样本学习风格 |
+| `POST /api/output/{format}` | 将已有 Markdown 转换为指定格式 |
 | `GET /api/intelligence/topics` | 当前监控主题与实体 |
 | `GET /api/intelligence/alerts` | 情报告警列表 |
 | `GET /api/intelligence/briefings` | 研究简报列表 |
@@ -196,6 +238,32 @@ deep-research-agent/
     │   ├── fact_checker.py
     │   ├── writer.py
     │   └── editor.py
+    ├── cognition/          # 认知增强控制层
+    │   ├── controller.py
+    │   ├── planner.py
+    │   ├── meta_critic.py
+    │   └── models.py
+    ├── tools/              # 通用工具注册表
+    │   ├── base.py
+    │   ├── registry.py
+    │   ├── search_tool.py
+    │   ├── fetch_tool.py
+    │   ├── kb_tool.py
+    │   ├── calculator_tool.py
+    │   └── date_tool.py
+    ├── output/             # 多模态创作输出格式器
+    │   ├── base.py
+    │   ├── registry.py
+    │   ├── markdown.py
+    │   ├── slides.py
+    │   ├── html.py
+    │   ├── dataset_brief.py
+    │   └── action_plan.py
+    ├── style/              # 用户研究风格学习
+    │   ├── models.py
+    │   └── learner.py
+    ├── evaluation/         # 报告质量评估
+    │   └── metrics.py
     ├── config.py           # 配置加载
     ├── search.py           # 搜索引擎封装
     ├── fetcher.py          # 网页抓取与正文提取
@@ -203,7 +271,7 @@ deep-research-agent/
     ├── research_state.py   # 研究状态管理
     ├── orchestrator.py     # 多 Agent 团队协调器
     └── report.py           # Markdown 报告生成
-└── intelligence/           # 实时研究情报系统
+├── intelligence/           # 实时研究情报系统
     ├── sources/            # 学术源适配器（arXiv/PubMed/bioRxiv/S2/OpenAlex）
     ├── models.py           # 文章、告警、简报模型
     ├── store.py            # 情报本地存储

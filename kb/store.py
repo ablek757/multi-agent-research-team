@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from kb.analyzer import build_topic_graph, merge_entities, merge_topics
+from kb.embeddings import VectorMemory, build_embedding_provider, build_report_text
 from kb.models import Entity, Event, KnowledgeBase, Report
 from kb.search import KnowledgeSearch
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 class KnowledgeStore:
     """基于 JSONL 文件的研究知识库。"""
 
-    def __init__(self, data_dir: str = "data"):
+    def __init__(self, data_dir: str = "data", memory_config=None, llm_config=None):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.kb_file = self.data_dir / "kb.jsonl"
@@ -24,6 +25,18 @@ class KnowledgeStore:
 
         self.kb = KnowledgeBase()
         self.search = KnowledgeSearch()
+        self.memory_config = memory_config
+        self._vector_memory: Optional[VectorMemory] = None
+        self._embedding_provider = None
+        if memory_config and memory_config.enabled:
+            self._vector_memory = VectorMemory(
+                vector_dir=str(self.data_dir / memory_config.vector_dir)
+            )
+            self._embedding_provider = build_embedding_provider(
+                memory_config,
+                api_key=llm_config.api_key if llm_config else "",
+                base_url=llm_config.base_url if llm_config else None,
+            )
         self._load()
 
     def _load(self):
@@ -72,6 +85,7 @@ class KnowledgeStore:
         if report.id in self.kb.reports:
             self.delete_report(report.id)
         self._add_to_memory(report, persist=True)
+        self.embed_report(report)
         return report
 
     def delete_report(self, report_id: str) -> bool:
@@ -90,6 +104,8 @@ class KnowledgeStore:
             self.search.index_report(report)
 
         self._rewrite_kb()
+        if self._vector_memory is not None:
+            self._vector_memory.remove(report_id)
         return True
 
     def get_report(self, report_id: str) -> Optional[Report]:
@@ -186,6 +202,60 @@ class KnowledgeStore:
                 logger.warning("导入报告失败 %s: %s", md_file, exc)
         return ingested
 
+    def embed_report(self, report: Report) -> bool:
+        """为报告生成并保存 embedding（若记忆功能启用）。"""
+        if self._vector_memory is None or self._embedding_provider is None:
+            return False
+        try:
+            text = build_report_text(report)
+            vector = self._embedding_provider.embed([text])[0]
+            self._vector_memory.add(report.id, vector)
+            logger.info("已为报告 %s 生成向量 embedding", report.id)
+            return True
+        except Exception as exc:
+            logger.warning("生成报告 %s 的 embedding 失败: %s", report.id, exc)
+            return False
+
+    def semantic_search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """基于向量相似度语义检索报告。"""
+        if self._vector_memory is None or self._embedding_provider is None:
+            return []
+        query_vector = self._embedding_provider.embed([query])[0]
+        results = self._vector_memory.search(query_vector, top_k=top_k)
+        enriched = []
+        for report_id, score in results:
+            report = self.kb.reports.get(report_id)
+            if report:
+                enriched.append(
+                    {
+                        "report": report.to_storage(),
+                        "score": score,
+                    }
+                )
+        return enriched
+
+    def find_related_reports(self, report_id: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """基于向量找到与指定报告最相关的历史研究。"""
+        if self._vector_memory is None or self._embedding_provider is None:
+            return []
+        report = self.kb.reports.get(report_id)
+        if report is None:
+            return []
+        text = build_report_text(report)
+        query_vector = self._embedding_provider.embed([text])[0]
+        results = self._vector_memory.search(query_vector, top_k=top_k, exclude_ids=[report_id])
+        enriched = []
+        for rid, score in results:
+            related = self.kb.reports.get(rid)
+            if related:
+                enriched.append(
+                    {
+                        "report": related.to_storage(),
+                        "score": score,
+                    }
+                )
+        return enriched
+
     def clear_all(self):
         """清空知识库。"""
         self.kb.reports.clear()
@@ -194,3 +264,5 @@ class KnowledgeStore:
         self.search.clear()
         if self.kb_file.exists():
             self.kb_file.unlink()
+        if self._vector_memory is not None:
+            self._vector_memory.clear()

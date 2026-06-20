@@ -22,6 +22,7 @@ class Writer(BaseAgent):
         topic: str,
         state: ResearchState,
         language: str,
+        style_profile=None,
     ) -> str:
         """撰写报告初稿。"""
         self._progress("正在撰写报告初稿...")
@@ -32,6 +33,8 @@ class Writer(BaseAgent):
             "Cite sources inline using [n] notation where n corresponds to the source index. "
             "Acknowledge uncertainties and contradictions where they exist."
         )
+        if style_profile is not None:
+            system += "\n\n" + style_profile.to_prompt_instructions()
         lang_hint = "Write in Chinese." if language == "zh" else "Write in English."
         user = self._build_prompt(topic, state, lang_hint)
         report = self.complete(system, user)
@@ -45,6 +48,7 @@ class Writer(BaseAgent):
         feedback: str,
         state: ResearchState,
         language: str,
+        style_profile=None,
     ) -> str:
         """根据编辑反馈修订报告。"""
         self._progress("正在根据审稿意见修订报告...")
@@ -53,6 +57,8 @@ class Writer(BaseAgent):
             "based on the editor's feedback. Preserve the Markdown structure and source citations. "
             "Address every specific issue raised; if you disagree, explain why."
         )
+        if style_profile is not None:
+            system += "\n\n" + style_profile.to_prompt_instructions()
         lang_hint = "Write in Chinese." if language == "zh" else "Write in English."
         user = (
             f"Topic: {topic}\n\n"

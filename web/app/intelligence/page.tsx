@@ -6,11 +6,19 @@ import BriefingCard from "@/components/BriefingCard";
 import ScanButton from "@/components/ScanButton";
 
 export default async function IntelligencePage() {
-  const [topicsData, alertsData, briefingsData] = await Promise.all([
-    getIntelligenceTopics(),
-    listAlerts(undefined, 6, 0),
-    listBriefings(undefined, 3, 0),
-  ]);
+  let topicsData: { topics: Record<string, { entities: string[]; report_ids: string[] }> } = { topics: {} };
+  let alertsData: { alerts: any[] } = { alerts: [] };
+  let briefingsData: { briefings: any[] } = { briefings: [] };
+
+  try {
+    [topicsData, alertsData, briefingsData] = await Promise.all([
+      getIntelligenceTopics(),
+      listAlerts(undefined, 6, 0),
+      listBriefings(undefined, 3, 0),
+    ]);
+  } catch (err) {
+    // 构建时 API 可能未运行，使用空数据
+  }
 
   const topics = Object.entries(topicsData.topics);
 

@@ -53,6 +53,8 @@ class ResearchState:
         self.editor_feedback: List[str] = []
         self.revisions: List[Dict[str, Any]] = []
         self.report_body: str = ""
+        self.reflections: List[Dict[str, Any]] = []
+        self.metrics: Dict[str, Any] = {}
 
     def add_source(self, title: str, url: str, snippet: str = "") -> int:
         if url in self.url_to_index:
@@ -132,4 +134,6 @@ class ResearchState:
             ],
             "editor_feedback": self.editor_feedback,
             "revisions": self.revisions,
+            "reflections": self.reflections,
+            "metrics": self.metrics,
         }

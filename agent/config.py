@@ -61,6 +61,51 @@ class KBConfig:
 
 
 @dataclass
+class CognitionConfig:
+    """认知增强层配置。"""
+
+    enabled: bool = False
+    reflection_rounds: int = 1
+    max_subtasks: int = 5
+    enable_checkpoints: bool = False
+    max_replan_iterations: int = 2
+
+
+@dataclass
+class MemoryConfig:
+    """长期向量记忆配置。"""
+
+    enabled: bool = False
+    backend: str = "openai"  # openai | sentence_transformers | mock
+    model: str = "text-embedding-3-small"
+    vector_dir: str = "vectors"
+    chunk_size: int = 500
+    chunk_overlap: int = 50
+    top_k: int = 10
+
+
+@dataclass
+class OutputConfig:
+    """多模态创作输出配置。"""
+
+    formats: List[str] = field(default_factory=lambda: ["markdown"])
+    slides_template: str = "default"
+    html_theme: str = "default"
+    dataset_brief_max_rows: int = 100
+    action_plan_max_items: int = 20
+
+
+@dataclass
+class StyleConfig:
+    """用户研究风格学习配置。"""
+
+    enabled: bool = False
+    profile_path: str = "data/user_style_profile.json"
+    min_samples: int = 1
+    auto_learn_from_edits: bool = True
+
+
+@dataclass
 class NotifyEmailConfig:
     """邮件通知配置。"""
 
@@ -118,6 +163,10 @@ class Config:
     report: ReportConfig = field(default_factory=ReportConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
     kb: KBConfig = field(default_factory=KBConfig)
+    cognition: CognitionConfig = field(default_factory=CognitionConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
+    output: OutputConfig = field(default_factory=OutputConfig)
+    style: StyleConfig = field(default_factory=StyleConfig)
     intelligence: IntelligenceConfig = field(default_factory=IntelligenceConfig)
 
     @classmethod
@@ -140,6 +189,10 @@ class Config:
             report=ReportConfig(**data.get("report", {})),
             team=TeamConfig(**data.get("team", {})),
             kb=KBConfig(**data.get("kb", {})),
+            cognition=CognitionConfig(**data.get("cognition", {})),
+            memory=MemoryConfig(**data.get("memory", {})),
+            output=OutputConfig(**data.get("output", {})),
+            style=StyleConfig(**data.get("style", {})),
             intelligence=cls._load_intelligence_config(data.get("intelligence", {})),
         )
 
@@ -179,3 +232,10 @@ class Config:
             raise ValueError("team.max_research_iterations must be non-negative")
         if self.team.review_rounds < 0:
             raise ValueError("team.review_rounds must be non-negative")
+        if self.cognition.max_subtasks < 1:
+            raise ValueError("cognition.max_subtasks must be at least 1")
+        if self.memory.backend not in {"openai", "sentence_transformers", "mock"}:
+            raise ValueError("memory.backend must be one of: openai, sentence_transformers, mock")
+        for fmt in self.output.formats:
+            if fmt not in {"markdown", "slides", "html", "dataset_brief", "action_plan"}:
+                raise ValueError(f"Unsupported output format: {fmt}")

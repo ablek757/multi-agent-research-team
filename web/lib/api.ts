@@ -209,3 +209,84 @@ export async function runIntelligenceScan(topics?: string[]): Promise<{ scanned_
     body: JSON.stringify({ topics }),
   });
 }
+
+export interface ResearchJob {
+  job_id: string;
+  status: string;
+  topic: string;
+  created_at: string;
+  logs?: string[];
+  sources?: number;
+  findings?: number;
+  metrics?: Record<string, number>;
+  outputs?: { format: string; path?: string; error?: string }[];
+  state_path?: string;
+  error?: string;
+}
+
+export async function startResearch(
+  topic: string,
+  cognitive = false,
+  formats?: string[],
+  depth?: number
+): Promise<{ job_id: string; status: string }> {
+  return fetchJson("/api/research", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic, cognitive, formats, depth }),
+  });
+}
+
+export async function getResearchStatus(jobId: string): Promise<ResearchJob> {
+  return fetchJson<ResearchJob>(`/api/research/${encodeURIComponent(jobId)}`);
+}
+
+export async function semanticSearch(
+  query: string,
+  topK = 10
+): Promise<{ query: string; results: { report: Report; score: number }[] }> {
+  return fetchJson("/api/memory/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, top_k: topK }),
+  });
+}
+
+export async function getRelatedReports(
+  reportId: string,
+  topK = 10
+): Promise<{ reports: { report: Report; score: number }[] }> {
+  return fetchJson(`/api/reports/${encodeURIComponent(reportId)}/related?top_k=${topK}`);
+}
+
+export interface StyleProfile {
+  language: string;
+  paragraph_length: string;
+  citation_density: string;
+  structure_preference: string;
+  transition_words: string[];
+  critical_intensity: number;
+  tone: string;
+  custom_notes: string;
+  sample_count: number;
+}
+
+export async function getStyleProfile(): Promise<StyleProfile> {
+  return fetchJson<StyleProfile>("/api/style/profile");
+}
+
+export async function learnStyle(payload: {
+  original?: string;
+  revised?: string;
+  feedback?: string;
+}): Promise<StyleProfile> {
+  return fetchJson<StyleProfile>("/api/style/learn", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listOutputFormats(): Promise<{ formats: string[] }> {
+  return fetchJson<{ formats: string[] }>("/api/formats");
+}

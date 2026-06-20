@@ -1,5 +1,5 @@
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 from agent.agents import Analyst, Editor, FactChecker, Researcher, SearchPlanner, Writer
 from agent.config import Config
@@ -13,6 +13,7 @@ class TeamOrchestrator:
 
     调度 SearchPlanner、Researcher、Analyst、FactChecker、Writer、Editor
     等角色，通过迭代搜索、分析、核查、撰稿与审稿，输出深度研究报告。
+    当 cognition.enabled 为 true 时，每轮会调用 MetaCritic 进行反思。
     """
 
     def __init__(self, config: Config, progress_callback: Callable[[str], None] | None = None):
@@ -26,6 +27,13 @@ class TeamOrchestrator:
         self.fact_checker = FactChecker(config.llm, progress_callback)
         self.writer = Writer(config.llm, progress_callback)
         self.editor = Editor(config.llm, progress_callback)
+        self._meta_critic: Optional = None
+
+    def _get_meta_critic(self):
+        if self._meta_critic is None and self.config.cognition.enabled:
+            from agent.cognition.meta_critic import MetaCritic
+            self._meta_critic = MetaCritic(self.config.llm)
+        return self._meta_critic
 
     def run(self, topic: str) -> ResearchState:
         self._progress(f"开始多 Agent 协作研究主题: {topic}")
@@ -42,6 +50,10 @@ class TeamOrchestrator:
             self._progress(f"===== 第 {iteration}/{max_iterations} 轮研究 =====")
             self._research_iteration(topic, queries, iteration)
 
+            # 认知增强：元认知反思
+            if self.config.cognition.enabled:
+                self._reflect(topic, iteration)
+
             if iteration < max_iterations:
                 if not self._should_continue_research():
                     self._progress("当前信息已足够充分，提前结束研究阶段")
@@ -55,6 +67,17 @@ class TeamOrchestrator:
 
         report_body = self._write_and_revise(topic)
         self.state.report_body = report_body
+
+        # 质量评估
+        try:
+            from agent.evaluation import ReportEvaluator
+            evaluator = ReportEvaluator(self.config)
+            metrics = evaluator.evaluate(topic, self.state, report_body)
+            self.state.metrics = metrics.to_dict()
+            self._progress(f"报告综合质量评分: {metrics.overall_score:.2f}")
+        except Exception as exc:
+            logger.warning("质量评估失败: %s", exc)
+
         self._progress("多 Agent 协作研究完成")
         return self.state
 
@@ -97,10 +120,12 @@ class TeamOrchestrator:
         return False
 
     def _write_and_revise(self, topic: str) -> str:
+        style_profile = self._load_style_profile()
         report_body = self.writer.write(
             topic,
             self.state,
             self.config.research.language,
+            style_profile=style_profile,
         )
 
         rounds = self.config.team.review_rounds if self.config.team.enable_editor else 0
@@ -126,10 +151,59 @@ class TeamOrchestrator:
                 feedback,
                 self.state,
                 self.config.research.language,
+                style_profile=style_profile,
             )
             self.state.revisions[-1]["after"] = report_body
 
+            # 若启用风格学习，从修订中学习
+            if self.config.style.enabled and self.config.style.auto_learn_from_edits:
+                try:
+                    from agent.style import StyleLearner
+                    learner = StyleLearner(self.config.style, self.config.llm)
+                    learner.learn_from_feedback(report_body, feedback)
+                except Exception as exc:
+                    logger.warning("风格学习失败: %s", exc)
+
         return report_body
+
+    def _load_style_profile(self):
+        if not self.config.style.enabled:
+            return None
+        try:
+            from agent.style import StyleLearner
+            learner = StyleLearner(self.config.style)
+            profile = learner.load_profile()
+            if profile.sample_count >= self.config.style.min_samples:
+                return profile
+        except Exception as exc:
+            logger.warning("加载用户风格画像失败: %s", exc)
+        return None
+
+    def _reflect(self, topic: str, iteration: int):
+        """调用 MetaCritic 进行反思，并将建议查询纳入后续轮次。"""
+        critic = self._get_meta_critic()
+        if critic is None:
+            return
+        self._progress(f"===== 第 {iteration} 轮元认知反思 =====")
+        reflection = critic.reflect(
+            topic=topic,
+            state=self.state,
+            language=self.config.research.language,
+        )
+        self.state.reflections.append(
+            {
+                "iteration": iteration,
+                "reasoning": reflection.reasoning,
+                "information_gaps": reflection.information_gaps,
+                "source_bias_notes": reflection.source_bias_notes,
+                "suggested_queries": reflection.suggested_queries,
+            }
+        )
+        if reflection.suggested_queries:
+            for q in reflection.suggested_queries:
+                if q not in self.state.open_questions:
+                    self.state.open_questions.append(q)
+        self._progress(f"反思结论：{reflection.reasoning[:120]}...")
 
     def _max_research_iterations(self) -> int:
         return self.config.team.max_research_iterations or self.config.research.depth
